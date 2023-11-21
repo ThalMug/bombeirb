@@ -1,0 +1,206 @@
+% mettre le symbole % me permet d'écrire du texte non pris en compte lors de la compilation (équivalent du # en python)
+% ça c'est mon code de base j'y ai mis des indications pour toi !
+
+\documentclass[12pt,a4paper]{article} % indique le type de document que tu vas faire
+
+% ce qui suit est le préambule : un paramétrage du document qui ne sera pas écrit sur le document pdf
+
+\usepackage[utf8]{inputenc} % encodage utilisé
+\usepackage[T1]{fontenc} % pareil
+\usepackage[french]{babel} % caractères français
+\frenchbsetup{StandardLists=true} % pour éviter que le package babel ne rentre en conflit avec enumitem
+\usepackage{enumitem} % personnaliser des listes
+\usepackage[a4paper,left=2cm,right=2cm,top=2cm,bottom=2cm]{geometry} % les marges
+\usepackage{hyperref} % met des hyperliens internes au fichier pdf dans la table des matières
+\usepackage{graphicx} % insérer des images
+\usepackage{array} % important
+\usepackage{tabularx} % pour les tableaux sur toute la page
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{mathrsfs}
+\usepackage{amsthm}
+\usepackage{setspace}
+\usepackage{comment}
+\usepackage{caption}
+\usepackage{mathptmx}
+\usepackage{indentfirst}
+\usepackage{listings}
+\usepackage{textcomp}
+\doublespacing
+
+\newcommand{\R}{\mathbb{R}} % Le R mathématique
+\newcommand{\N}{\mathbb{N}} % idem
+\newcommand{\C}{\mathbb{C}}
+\newcommand{\K}{\mathbb{K}}
+\newcommand{\Z}{\mathbb{Z}}
+
+\newcolumntype{Y}{>{\centering\arraybackslash}X} % permet de centrer le texte des cellules dans les tableaux
+
+\setlength{\parindent}{0.5cm}
+\setlength{\parskip}{1ex plus 0.5ex minus 0.2ex}
+\onehalfspacing
+\newcommand{\hsp}{\hspace{20pt}}
+\newcommand{\HRule}{\rule{\linewidth}{0.5mm}}
+\newcommand{\dint}{\displaystyle\int}
+
+\begin{document} % fin du préambule et début du corps du document
+
+\begin{center}
+  \huge{Bomb'eirb}
+\end{center}
+
+\section{Introduction}
+
+Le présent document constitue notre rapport sur le projet \textbf{Bomb'eirb},
+ dont le code a été écrit par les professeurs de l'ENSEIRB-MATMECA, Florian 
+ MEIGNAN et Maël VIRIOT. Il s'agit ici d'expliciter le fonctionnement du 
+ jeu en décrivant brièvement chaque solution technique apportée au 
+ différents problèmes qui se posaient.
+
+\section{Le jeu}
+
+Le contexte global de jeu est géré par le type \emph{struct game} qui contient toutes les variables nécessaires à son fonctionnement: le joueur(\emph{struct player* player}), le niveau courant (\emph{int level}) et le nombre de niveaux total (\emph{int levels}), un tableau de  maps \emph{struct map}, et un booléen \emph{onPause} permettant d'indiquer si le jeu est en pause ou non.
+
+\subsection{Démarrage}
+
+Après avoir initialisé la SDL il nous faut initialiser le contexte de jeu. Pour cela il nous faut tout d'abord tester si une sauvegarde existe. On appelle la fonction \emph{fopen} pour tenter d'ouvrir le fichier en lecture. Si la fonction nous renvoie une résultat non nul, le fichier existe bel et bien et nous pouvons utiliser la fonction \emph{save\_load}
+pour charger le contenue (cette fonction est explicitée plus loin). Si la valeur de retour de \emph{fopen} est \emph{NULL} alors on initialise un nouveau jeu avec les valeurs et les maps par défaut.
+
+\subsection{Fin}
+
+Le jeu s'arrête en cas de victoire ou de défaite. 
+
+\textbf{Condition de victoire:} le joueur se trouve sur la même case qu'une cellule de type \emph{SCENERY\_PRINCESS} (sous type de cellule \emph{CELL\_SCENERY}).
+
+\textbf{Condition de victoire:} La vie du joueur est tombée à 0. On utilise la fonction \emph{player\_get\_lives} et on teste si la valeur est strictement positive.
+
+Ces deux tests sont faits à chaque tour de boucle.
+
+\subsection{Portes et changements de niveau}
+
+Sur les cartes se trouvent des clés, une porte d'entrée et une porte de sortie (voir section sur les maps). Lorsque le joueur se déplace on effectue les tests suivants:\\
+Si le joueur se trouve sur une clé, on la remplace par une cellule vide et la valeur keyState du joueur est mise à 1.\\
+Si le joueur se trouve sur une porte ouverte, on change de niveau.\\
+Si le joueur se trouve sur une porte fermée mais que \emph{player.keyState != 0} alors on ouvre la porte (en changeant le type de cellule), on met le keyState à 0 et on change de niveau.
+
+Le changement se fait à l'aide de la fonction \emph{game\_change\_level} qui prend en argument le jeu, et une entier "offset". On change la valeur de \emph{game.level} en lui aditionnant la valeur de offset. Si offset vaut -1 cela revient à revenir à la map précédente, s'il vaut 1 on va à la map suivante. De plus lors de tout changement de map,
+on actualise le point de spawn de la map que l'on quitte grâce à la fonction \emph{map\_set\_player\_spawn} en y mettant la position que le joueur quitte juste avant d'aller sur la porte. Ainsi le joueur revient toujours au bon endroit s'il venait à revenir sur une map précédente.
+
+\section{Les maps}
+
+L'objet map est représenté map le type \emph{struct map} dont les champs sont: la grille (\emph{unsigned char[]}), les dimentions $w$ et $h$, la position de spawn du joueur (\emph{Vector2}), le nombre de monstres, le tableau des monstres (\emph{struct monster[]}), le joueur (\emph{struct player*}), et le contexte global de jeu (\emph{struct game*}).
+
+Les maps sont soit initialisées par le jeu lors de la création d'une nouvelle partie, soit lues depuis un fichier de sauvegarde (voir section sur les sauvegardes). Lors de l'initisation la position de spawn du joueur est soit lue dans le fichier de sauvegarde (s'il existe) ou sur la grille directement à l'aide de la cellule \emph{CELL\_PLAYER\_SPAWN}.
+
+La grille est un tableau de $w \times h$ octets, chaque octet indique le type de cellule (\emph{enum cell\_type})
+Les 4 bits de poids fort indiquent le type principal 
+(\emph{EMPTY, SCENERY...}) et les bits de poids faibles donnent des informations complémentaires comme le sous-type par exemple.
+
+La position de spawn point est utilisée et pour l'apparition dujoueur en début de partie, et pour les changements de niveau.
+
+\subsection{Les types de cellule}
+
+\paragraph{CELL\_PLAYER\_SPAWN} Valeur: 0x0f. Indique la position d'apparition du joueur sur la carte cette position est sujette à changement en cours de jeu
+et n'est pas remise à jour sur la grille, elle est uniquement ici pour initialiser une nouvelle carte à partir d'une grille par défaut.
+
+\paragraph{CELL\_BOX} Valeur: 0x20. Une caisse au sens large, le contenu est indiqué par les bits de poids faible.
+
+\paragraph{CELL\_DOOR} Valeur: 0x30. Une porte. Une porte peut être une entrée ou une sortie (la différence étant qu'une sortie mène vers le niveau suivant quand une entrée mène vers le niveau qui précède), et peut être ouverte ou fermée. Toutes ces informations sont encodées en poids faible.
+
+\paragraph{CELL\_KEY} Valeur: 0x40. Indique une clé sur la grille.
+
+\paragraph{CELL\_MONSTER} Valeur: 0x60. Indique la présence d'un monstre. Les 2 bits de poids faible indiquent la direction pointée par le monstre.
+La gestion des monstres sera détaillée dans la section les concernant.
+
+\paragraph{CELL\_BOMB} Valeur: 0x70. Indique la présence d'une bombe mais pas son type.
+
+\paragraph{CELL\_EXPLOSION} Valeur: 0x80. Indique une case enflammée.
+
+\section{Le joueur}
+
+\subsection{Fonctionnement global}
+
+Le joueur est représenté par une \emph{struct} ayant pour champs ses coordonnées $x$ et $y$, le nombre de vie et de bombes, la range desdites bombes, un booléen indiquant si le joueur a une clé ou non, un timer de damage (dont nous reparlerons) et enfin un \emph{enum direction} indiquant dans quelle direction le joueur est tourné.
+
+Le joueur est connu au niveau global du jeu via un pointeur \emph{struct player*}, mais également au niveau de chaque map via un champ du même type.
+
+\subsection{Mouvements et dommages}
+
+Dans la boucle principale du jeu existe une fonction qui teste les inputs claviers.
+Si une touche de déplacement est pressée, le déplacement se fait en deux temps:\\
+-changer la direction du joueur\\
+-déplacer le joueur
+
+Le déplacement du joueur se fait grâce à la fonction \emph{player\_move} qui prend en argument le joueur et la map dans laquelle il se trouve.
+
+Tout d'abord on récupère la direction stockée dans le champ direction, et on la convertit en \emph{Vector2} (par souci de simplicité dans la suite). Il nous faut ensuite tester si le mouvement est valide, ce pour quoi nous utilisons une autre fonction: \emph{player\_move\_aux}. Elle prend en argument la map, le joueur et le vecteur directionnel.
+
+En ajoutant ce vecteur à la position du joueur on obtient la position de la cellule cible, il nous suffit de faire les tests suivants: si la cellule est de type \emph{CELL\_EMPTY} on accepte le déplacement (c'est à dire que l'on renvoit 1). Si la cellule est une clé, une princesse, une porte, un bonus, un monstre ou une explosion, on accept le déplacement. Si la cellule est une caisse on appelle la fonction \emph{map\_cell\_move}. Cette fonction prend en argument la map, la position de la cellule à déplacer et un vecteur de déplacement. Si le déplacement est valide (i.e. si la cellule destination est vide) la cellule est déplacée dans la grille, et 1 est renvoyé, sinon 0 est renvoyé. Enfin si aucun des cas précédents n'est atteint, on renvoit 0.
+
+Une fois que l'on sait si le déplacement est valide il suffit de mettre à jour les coordonnées du joueur.
+
+C'est également à ce niveau que sont gérés les dommages: lors du déplacement on teste si la cellule de destination est une explosion ou un monstre. Si tel est le cas, on enlève une vie au joueur en décrémentant le champ lives.
+
+On initialise ensuite un timer avec la fonction \emph{SDL\_AddTimer}. Elle nous permet de créer un timer géré par la SDL, que l'on stock dans la struct du joueur. Ce timer, une fois le délai défini dépassé (ici 1 seconde) appelle automatiquement une fonction callback qui prend en arguments le délai et un pointeur \emph{void*} qui pointe vers n'importe quel objet de notre choix, ici la map.
+
+Ce callback teste si le joueur se trouve toujours sur une cellule "toxique" (explosion ou monstre) et si tel est le cas, lui inflige un dégat supplémentaire avant de retourner 1000 (le délai en millisecondes avant le prochain callback). Ainsi tant que le joueur se trouvera en danger il prendre un dégat chaque seconde.
+
+\subsection{Vies}
+
+Le jeu teste la valeur de vie du joueur à chaque tour de boucle. Si celle ci est nulle le jeu s'arrête. Bien que nous aurions aimé faire un écran de fin, par faute de temps nous nous sommes contentés d'un print avant de mettre fin à l'exécution.
+
+\section{Les monstres}
+
+Quel intérêt y aurait-il à jouer s'il aucun danger ne vevait se dresser sur notre chemin?
+Ils nous faut bien entendu des monstres!
+
+\subsection{Fonctionnement global}
+
+L'objet monstre est représenté par le type \emph{struct monster} contenant les champs suivants: la position $x$ et $y$, la direction (\emph{enum direction}), 
+la map dans laquelle se trouve le monstre, le contexte de jeu et un timer utilisé pour les déplacements.
+
+Les monstres sont gérés au niveau des maps: chaque map possède un tableau pouvant contenir un maximum de 16 \emph{struct monster*}. A l'initialisation du jeu,  les positions des monstres sont lues depuis la grille. On appelle la fonction \emph{map\_spawn\_monster} autant de fois que nécessaire. Cette fonction alloue l'espace pour un monstre, initialise les différents champs et place le monstre dans le tableau.
+
+
+\subsection{Mouvements et attaques}
+
+Les monstres peuvent être nombreux, et potentiellement cachés dans des caisses. En outre il ne peuvent être placés que sur des cases vides. 
+Il nous faut donc utiliser un type de cellule spécifique: \emph{CELL\_MONSTER} (0x80).
+
+Les déplacements sont aléatoirement générés par un générateur de nombres pseudo-aléatoires implémenté dans le fichier rng.c.
+Il s'agit d'un algorithme empruntant des fonctions à l'algorithme d'extension de clé de ChaCha20 qui a l'avantage d'être rapide.
+Si l'algorithme a été bien entendu grandement simplifié, le résultat n'en apparait pas moins aléatoire.
+
+On génère un entier entre 0 et 3, qui nous permet de déterminer la direction à emprunter.
+La marche à suivre est ensuite d'appeller la fonction \emph{map\_cell\_move}. Tant que le mouvement n'est pas valide on génère un nouvel entier.
+On déplace ensuite le monstre, en vérifiant si la case de destination est un joueur. Si tel est le cas on lui inflige un dégât et on 
+initialise son timer de dégâts.
+
+Chaque monstre possède un timer qui permet d'effectuer cet algorithme chaque seconde.
+
+\section{Les sauvegardes}
+
+
+\subsection{Enregister une partie}
+
+Les sauvegardes sont gérées par le jeu à la fin de la boucle: on ouvre en écriture le fichier save.s contenu dans le dossier saves, et 
+on écrit toutes les données nécessaires en binaire dans des entêtes délimités par des chaînes de caractères indiquant le type d'entête.
+
+\paragraph{Entête "game"} \hspace{0pt} \\
+Cet entête contient les données globales de jeu: combien de niveau il y a au total, quel est le niveau courant et l'état du jeu (c'est à dire si le jeu est en pause ou non). Chaque valeur est codée sur un octet.
+
+\paragraph{Entête "player"} \hspace{0pt} \\
+Contient toutes les informations sur le joueur: sa position, ses vies et bombes restantes, son "key\_state" (un bolléen indiquant si il a une clé) et sa range. Chaque valeur est codée sur un octet.
+
+\paragraph{Entête "bombs"} \hspace{0pt} \\
+La première valeur de cet entête est le nombre de bombes posées. En suite pour chaque bombes nous trouvons dans l'odre: sa position, la valeur de son timer encodée en little endian sur 4 octets.
+
+\paragraph{Entête "maps"} \hspace{0pt} \\
+Cet entête contient directement les données de chaque map, à la suite (le nombre de maps étant indiqué plus tôt dans le fichier). 
+Pour chaque map on indique sa largeur et sa hauteur, la position du spawn du joueur. Ensuite vient la grille avec toutes les valeurs qui la compose écrites de façon continue.
+
+\subsection{Charger une partie}
+
+Pour charger une partie, il suffit de lire le chaque entête contenu dans le fichier save.s. On intialise d'abord le jeu avec les valeurs globales, ensuite le joueur, les bombes et enfin les maps en prenant soin de créer les monstres et les bombes au fur et à mesure qu'on les rencontre.
+
+\end{document}

@@ -1,0 +1,13 @@
+# Exec files
+*.exe
+*.out
+
+# Object files
+*.o
+
+bin/
+
+# save files
+*.s
+
+.vscode/
